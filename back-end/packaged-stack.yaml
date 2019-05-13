@@ -1,0 +1,155 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: AWS Demo App
+Globals:
+  Function:
+    Timeout: 3
+  Api:
+    Cors:
+      AllowOrigin: '''*'''
+      AllowHeaders: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
+      AllowMethods: '''GET,POST,DELETE'''
+Resources:
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      AutoVerifiedAttributes:
+      - email
+      Policies:
+        PasswordPolicy:
+          RequireLowercase: true
+          RequireUppercase: true
+          MinimumLength: 8
+      AliasAttributes:
+      - email
+      UserPoolName: aws-demo-app-user-pool
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: api
+      GenerateSecret: false
+      ExplicitAuthFlows:
+      - USER_PASSWORD_AUTH
+      UserPoolId:
+        Ref: UserPool
+      ReadAttributes:
+      - email
+      - email_verified
+      - name
+      - phone_number
+      WriteAttributes:
+      - email
+      - name
+      - phone_number
+  UserPhotoStorage:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: aws-demo-app-pg-jpk
+      CorsConfiguration:
+        CorsRules:
+        - AllowedHeaders:
+          - Authorization
+          AllowedMethods:
+          - GET
+          AllowedOrigins:
+          - '*'
+          Id: userPhotos
+          MaxAge: '3000'
+  AwsDemoAppTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+      - AttributeName: type_id
+        AttributeType: S
+      - AttributeName: sort_key
+        AttributeType: S
+      - AttributeName: altsort_key
+        AttributeType: S
+      - AttributeName: ref_id
+        AttributeType: S
+      KeySchema:
+      - AttributeName: type_id
+        KeyType: HASH
+      - AttributeName: sort_key
+        KeyType: RANGE
+      GlobalSecondaryIndexes:
+      - IndexName: idx_alt
+        KeySchema:
+        - AttributeName: type_id
+          KeyType: HASH
+        - AttributeName: altsort_key
+          KeyType: RANGE
+        Projection:
+          ProjectionType: INCLUDE
+          NonKeyAttributes:
+          - content
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+      - IndexName: idx_ref
+        KeySchema:
+        - AttributeName: ref_id
+          KeyType: HASH
+        - AttributeName: altsort_key
+          KeyType: RANGE
+        Projection:
+          ProjectionType: INCLUDE
+          NonKeyAttributes:
+          - content
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+      ProvisionedThroughput:
+        ReadCapacityUnits: 1
+        WriteCapacityUnits: 1
+      TableName: AwsDemoApp
+  DemoAppApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      Auth:
+        Authorizers:
+          DemoAppCognitoAuthorizer:
+            UserPoolArn:
+              Fn::GetAtt:
+              - UserPool
+              - Arn
+  PhotoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://aws-demo-app/6c4bacfa4a247079a4c0eaad93e8f986
+      Handler: app.handler
+      Runtime: nodejs8.10
+      Events:
+        PostPhoto:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: DemoAppApi
+            Path: /photo
+            Method: POST
+            Auth:
+              Authorizer: DemoAppCognitoAuthorizer
+        GetPhoto:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: DemoAppApi
+            Path: /photo
+            Method: GET
+            Auth:
+              Authorizer: DemoAppCognitoAuthorizer
+Outputs:
+  CognitoUserPoolId:
+    Value:
+      Ref: UserPool
+  CognitoUserPoolClientId:
+    Value:
+      Ref: UserPoolClient
+  ApiUrl:
+    Description: API endpoint URL for Prod environment
+    Value:
+      Fn::Sub: https://${DemoAppApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/
+  PhotoBucket:
+    Value:
+      Ref: UserPhotoStorage

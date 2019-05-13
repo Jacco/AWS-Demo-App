@@ -1,0 +1,24 @@
+{
+    "name": "aws-demo-app",
+    "version": "1.0.0",
+    "description": "",
+    "scripts": {
+      "network": "docker network create aws-demo-app",
+      "describe": "aws cloudformation describe-stacks --stack-name aws-demo-app --output text",
+      "run": "sam local start-api --docker-network aws-demo-app --template stack.yaml",
+      "package": "sam package --template-file stack.yaml --output-template-file packaged-stack.yaml --s3-bucket aws-demo-app",
+      "deploy": "sam deploy --template-file packaged-stack.yaml --stack-name aws-demo-app --capabilities CAPABILITY_IAM"
+    },
+    "dependencies": {
+      "aws-amplify": "^1.1.7",
+      "aws-api-gateway-client": "^0.2.16",
+      "aws-sdk": "^2.340.0",
+      "eslint": "^5.8.0",
+      "uuid": "^3.3.2"
+    },
+    "devDependencies": {
+      "js-yaml": "^3.12.0",
+      "json-refs": "^3.0.12"
+    }
+  }
+  
